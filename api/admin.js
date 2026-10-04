@@ -4,7 +4,7 @@ const REPO = process.env.GITHUB_REPO || "tanmay910-svg/podium-rank";
 const BRANCH = process.env.GITHUB_BRANCH || "main";
 const FILE = "public/data/podium.json";
 const PASSWORD = process.env.PODIUM_ADMIN_PASSWORD;
-const SECRET = process.env.PODIUM_SESSION_SECRET;
+const SECRET = process.env.PODIUM_SESSION_SECRET || crypto.createHash("sha256").update(PASSWORD || "missing-password").digest("hex");
 
 function json(res, status, body) { res.status(status).setHeader("Content-Type","application/json"); return res.end(JSON.stringify(body)); }
 function sign(value) { return crypto.createHmac("sha256", SECRET || "missing-secret").update(value).digest("base64url"); }
