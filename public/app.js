@@ -93,7 +93,7 @@
               <div><div class="brand-title">PODIUM</div><div class="brand-tag">THINK • ARGUE • CONQUER</div></div>
             </div>
             <nav class="navlinks">
-              ${nav.map(([id,icon,label]) => `<button class="${active===id?'active':''}" onclick="location.hash='#${id}'">${icon} ${label}</button>`).join("")}
+              ${nav.map(([id,icon,label]) => `<button class="${active===id?'active':''}" onclick="location.hash='#${id}'">${icon} ${label}</button>`).join("")}<button class="navlogin" onclick="location.hash='#admin'">⚙ Moderator</button>
             </nav>
             <div class="pill">TERM 1 • 2026–27</div>
           </div>
@@ -181,6 +181,11 @@
     if (!state.data) return;
     const data = state.data;
     const route = state.route;
+    if (route === "admin") {
+      document.getElementById("app").innerHTML = state.admin ? adminDashboard(data) : adminLoginPage();
+      bindAdmin();
+      return;
+    }
     document.getElementById("app").innerHTML =
       route === "debates" ? debatesPage(data) :
       route === "members" ? membersPage(data) :
@@ -190,7 +195,7 @@
 
   async function load() {
     try {
-      let response = await fetch("/data/podium.json", { cache:"no-store" });
+      let response = await fetch("/api/data", { cache:"no-store" });
       if (!response.ok) throw new Error("Data file unavailable");
       state.data = await response.json();
       if (!state.data.seasons && state.data.season) state.data.seasons = [state.data.season];
@@ -202,10 +207,92 @@
     }
   }
 
-  window.addEventListener("hashchange", () => {
+
+  async function adminApi(body) {
+    const r = await fetch("/api/admin", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(j.error || "Request failed");
+    return j;
+  }
+  async function adminStatus() {
+    const r = await fetch("/api/admin", {cache:"no-store"});
+    const j = await r.json().catch(()=>({}));
+    state.admin = !!j.authenticated;
+  }
+  function adminLoginPage() {
+    return '<main class="wrap"><div class="login-box"><div class="eyebrow">PODIUM • MODERATOR ACCESS</div><h2>Moderator Dashboard</h2><p class="sub">Manage members, schedule activities and publish results.</p><form id="admin-login" class="form"><input class="input" id="admin-password" type="password" placeholder="Moderator password" required><button class="btn gold" type="submit">Sign in</button><div id="admin-error"></div></form></div></main>';
+  }
+  function adminDashboard(data) {
+    const season = activeSeason(data);
+    const members = (data.members||[]).filter(m=>m.active!==false);
+    const debates = getDebates(data, season?.id);
+    const lb = calcLeaderboard(data, season?.id);
+    const open = debates.filter(d=>d.status!=="Completed");
+    const rows = members.map(m=>{
+      const r=lb.find(x=>x.memberId===m.id);
+      return '<tr><td><strong>'+esc(m.name)+'</strong><div class="muted">'+esc(m.email||"")+'</div></td><td>'+esc(m.department||"—")+'</td><td class="points">'+(r?.totalPoints||0)+'</td><td>#'+(r?.rank||"—")+'</td><td><button class="btn danger small-btn" data-del-member="'+m.id+'">Remove</button></td></tr>';
+    }).join("");
+    const debateRows=debates.map(d=>'<tr><td>'+d.weekNumber+'</td><td><strong>'+esc(d.name)+'</strong></td><td>'+fmtDate(d.date)+'</td><td><span class="badge '+(d.status==="Completed"?"green":"")+'">'+esc(d.status||"Open")+'</span></td><td>'+(data.results||[]).filter(r=>r.debateId===d.id).length+'</td><td><button class="btn danger small-btn" data-del-debate="'+d.id+'">Remove</button></td></tr>').join("");
+    return '<main class="wrap"><section class="admin-head"><div><div class="eyebrow">⚙ MODERATOR CONTROL CENTER</div><h1 class="page-title">PODIUM ADMIN</h1><p class="sub">Add members, create activities and publish results. The public leaderboard reads the same live data.</p></div><button class="btn ghost" id="admin-logout">Log out</button></section>'+
+      '<section class="stats"><div class="stat"><div class="stat-l">Members</div><div class="stat-v">'+members.length+'</div></div><div class="stat"><div class="stat-l">Activities</div><div class="stat-v">'+debates.length+'</div></div><div class="stat"><div class="stat-l">Completed</div><div class="stat-v">'+debates.filter(d=>d.status==="Completed").length+'</div></div><div class="stat"><div class="stat-l">Leader</div><div class="stat-v admin-leader">'+esc(lb[0]?.name||"—")+'</div></div></section>'+
+      '<div id="admin-message"></div><section class="admin-grid">'+
+      '<div class="admin-panel"><h3>➕ Add member</h3><form id="member-form" class="form"><input class="input" name="name" placeholder="Full name" required><input class="input" name="email" placeholder="Email (optional)" type="email"><input class="input" name="department" placeholder="Department / year"><textarea class="input" name="bio" rows="3" placeholder="Short bio"></textarea><input class="input" name="avatar" placeholder="Avatar URL (optional)"><button class="btn gold">Add member</button></form></div>'+
+      '<div class="admin-panel"><h3>🗓 Create activity</h3><form id="debate-form" class="form"><input class="input" name="name" placeholder="Activity / debate title" required><div class="row"><input class="input grow" name="date" type="date"><input class="input grow" name="weekNumber" type="number" min="1" placeholder="Week"></div><input class="input" name="category" placeholder="Category"><textarea class="input" name="description" rows="3" placeholder="Description"></textarea><button class="btn indigo">Create activity</button></form></div>'+
+      '<div class="admin-panel full"><h3>🏆 Publish results</h3><p class="muted admin-help">Select an activity and arrange names from 1st onward. Points are calculated automatically: 1st 100, 2nd 88, 3rd 78, 4th 70, 5th 65, 6th+ 45.</p><div class="row"><select class="input grow" id="result-debate">'+open.map(d=>'<option value="'+d.id+'">Week '+d.weekNumber+': '+esc(d.name)+'</option>').join("")+'</select><button class="btn ghost" id="load-result-editor">Load</button></div><div id="result-editor"></div></div>'+
+      '<div class="admin-panel full"><h3>👥 Roster</h3><div class="admin-table">'+(members.length?'<table><thead><tr><th>Member</th><th>Department</th><th>Points</th><th>Rank</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="muted">No members yet.</div>')+'</div></div>'+
+      '<div class="admin-panel full"><h3>💬 Activities</h3><div class="admin-table">'+(debates.length?'<table><thead><tr><th>Week</th><th>Activity</th><th>Date</th><th>Status</th><th>Participants</th><th></th></tr></thead><tbody>'+debateRows+'</tbody></table>':'<div class="muted">No activities yet.</div>')+'</div></div></section></main>';
+  }
+  function bindResultEditor() {
+    const box=document.getElementById("result-editor"), sel=document.getElementById("result-debate");
+    if(!box||!sel)return;
+    const debate=state.data.debates.find(d=>d.id===sel.value);
+    const members=(state.data.members||[]).filter(m=>m.active!==false);
+    if(!debate){box.innerHTML='<div class="notice">Create an open activity first.</div>';return;}
+    let html='<div class="result-editor"><div class="result-head"><span>Participant order</span><span class="muted">1st → 2nd → 3rd → …</span></div><div id="participant-list">';
+    for(let i=0;i<members.length;i++){
+      html+='<div class="result-line"><span class="position-chip">'+(i+1<=5?["1st","2nd","3rd","4th","5th"][i]:"6th+")+'</span><select class="input participant-select"><option value="">— Not participating —</option>'+members.map(m=>'<option value="'+m.id+'">'+esc(m.name)+'</option>').join("")+'</select></div>';
+    }
+    html+='</div><button class="btn gold" id="publish-results">Publish official results</button></div>';
+    box.innerHTML=html;
+    document.getElementById("publish-results").onclick=async()=>{
+      const ids=[...box.querySelectorAll(".participant-select")].map(x=>x.value).filter(Boolean);
+      const unique=[...new Set(ids)];
+      if(!unique.length){alert("Select at least one participant.");return;}
+      if(unique.length!==ids.length){alert("A member can only appear once.");return;}
+      try{
+        const out=await adminApi({action:"publish_results",debateId:debate.id,memberIds:unique});
+        state.data=out.data; render();
+      }catch(e){document.getElementById("admin-message").innerHTML='<div class="notice error">'+esc(e.message)+'</div>';}
+    };
+  }
+  function bindAdmin() {
+    if(!state.admin){
+      const f=document.getElementById("admin-login");
+      if(f)f.onsubmit=async e=>{
+        e.preventDefault();
+        try{await adminApi({action:"login",password:document.getElementById("admin-password").value});state.admin=true;await load();render();}
+        catch(err){document.getElementById("admin-error").innerHTML='<div class="notice error">'+esc(err.message)+'</div>';}
+      };
+      return;
+    }
+    document.getElementById("admin-logout").onclick=async()=>{await adminApi({action:"logout"});state.admin=false;render();};
+    document.getElementById("member-form").onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));try{const out=await adminApi({action:"add_member",...b});state.data=out.data;e.currentTarget.reset();render();}catch(err){document.getElementById("admin-message").innerHTML='<div class="notice error">'+esc(err.message)+'</div>';}};    
+    document.getElementById("debate-form").onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));try{const out=await adminApi({action:"create_debate",...b});state.data=out.data;e.currentTarget.reset();render();}catch(err){document.getElementById("admin-message").innerHTML='<div class="notice error">'+esc(err.message)+'</div>';}};    
+    const loadBtn=document.getElementById("load-result-editor");if(loadBtn)loadBtn.onclick=bindResultEditor;
+    bindResultEditor();
+    document.querySelectorAll("[data-del-member]").forEach(b=>b.onclick=async()=>{if(!confirm("Remove this member and their results?"))return;const out=await adminApi({action:"delete_member",memberId:b.dataset.delMember});state.data=out.data;render();});
+    document.querySelectorAll("[data-del-debate]").forEach(b=>b.onclick=async()=>{if(!confirm("Remove this activity and its results?"))return;const out=await adminApi({action:"delete_debate",debateId:b.dataset.delDebate});state.data=out.data;render();});
+  }
+
+  window.addEventListener("hashchange", async () => {
     state.route = location.hash.replace(/^#\/?/, "") || "leaderboard";
+    if (state.route === "admin") await adminStatus();
     render();
   });
 
-  load();
+  (async () => {
+    await load();
+    if (state.route === "admin") await adminStatus();
+    render();
+  })();
 })();
