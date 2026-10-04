@@ -39,3 +39,25 @@ docker build -t podium-rank .
 docker run -d --name podium-rank -p 3001:3001 -v podium-data:/app/data --env-file .env podium-rank
 
 Do not commit .env.
+## Moderator dashboard
+
+The live Vercel version includes a moderator dashboard at `/#admin`.
+
+It supports:
+- adding/removing members
+- creating weekly activities/debates
+- entering participant order (1st → 2nd → 3rd → …)
+- automatic scoring using the official Podium scoring table
+- publishing results to the public leaderboard
+- viewing the roster, activity history, ranks and points
+
+### Vercel environment variables
+
+For the dashboard to save changes securely, add these Production environment variables in Vercel:
+
+- `GITHUB_TOKEN` — a GitHub fine-grained token restricted to this repository with **Contents: Read and write** permission.
+- `PODIUM_ADMIN_PASSWORD` — the moderator password you choose.
+
+The token stays server-side in the Vercel Function and is never sent to the browser.
+
+After adding the variables, redeploy the latest commit. The public dashboard can read rankings without the token; only moderator write actions require it.
