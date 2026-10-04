@@ -1,6 +1,15 @@
 {
-  "seasons": [],
+  "seasons": [
+    {
+      "id": "term-1-2026-27",
+      "name": "Term 1 • 2026–27",
+      "startDate": "2026-09-01",
+      "endDate": "2026-12-31",
+      "status": "Active",
+      "description": "PODIUM weekly debate season."
+    }
+  ],
   "members": [],
   "debates": [],
   "results": []
-}
+}\n
