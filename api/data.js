@@ -4,7 +4,7 @@ const FILE = "public/data/podium.json";
 
 async function githubFile() {
   const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${FILE}?ref=${BRANCH}`, {
-    headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" }
+    headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" }
   });
   if (!r.ok) throw new Error(`GitHub read failed: ${r.status}`);
   return r.json();
