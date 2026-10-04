@@ -15,7 +15,7 @@ function sessionToken() {
 }
 function validSession(req) {
   const cookie = req.headers.cookie || "";
-  const match = cookie.match(/(?:^|;\\s*)podium_admin=([^;]+)/);
+  const match = cookie.match(/(?:^|;\s*)podium_admin=([^;]+)/);
   if (!match) return false;
   const [exp, sig] = decodeURIComponent(match[1]).split(".");
   if (!exp || !sig || Number(exp) < Date.now() || !SECRET) return false;
